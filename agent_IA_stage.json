@@ -1,0 +1,364 @@
+{
+  "name": "agent IA stage",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        -640,
+        -32
+      ],
+      "id": "ff0a177a-c475-47ad-b788-84d891a7f6b3",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://www.google.com/alerts/feeds/13693484765452977325/2134726968653442702",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -432,
+        -32
+      ],
+      "id": "dd8658cb-884e-4fbf-a433-46732e09140b",
+      "name": "RSS Read"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Tu es un assistant de veille d'offres de stage pour un étudiant en Master 2 Informatique (spécialisé en Développement d'applications/logiciel et Data Analysis / Data Science).\n\nAnalyse l'offre suivante récupérée via un flux RSS :\nTitre : {{$json.title}}\nLien : {{$json.link}}\nContenu : {{$json.contentSnippet}}\n\nDétermine si elle est pertinente selon ces critères stricts :\n1. TYPE : Uniquement un stage (stage de perfectionnement, pré-emploi ou fin d'études). Écarte les CDI/CDD demandant de l'expérience, sauf si ouvert aux stagiaires.\n2. DOMAINE : Développement logiciel, web, mobile, full-stack OU Data (Data Analyst, Data Science, BI, Machine Learning). Écarte la maintenance informatique basique ou le support technique pur.\n3. LOCALISATION : Basé à Abidjan ou en 100% télétravail.\n4. NIVEAU : Privilégier niveau Master / Bac+4 / Bac+5, mais accepter Bac+3 si les missions techniques sont solides.\n\nRéponds UNIQUEMENT au format JSON strict suivant (sans balises markdown) :\n{\n  \"pertinent\": true ou false,\n  \"score\": note sur 10,\n  \"titre\": \"Intitulé exact du poste\",\n  \"entreprise\": \"Nom de l'entreprise (ou Non précisé)\",\n  \"lieu\": \"Abidjan ou Télétravail\",\n  \"resume\": \"2 phrases max sur les technologies et missions\",\n  \"lien\": \"{{$json.link}}\"\n}",
+        "hasOutputParser": true,
+        "messages": {
+          "messageValues": []
+        },
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        448,
+        -16
+      ],
+      "id": "22224d7d-8260-460c-b42b-a0e7a6710273",
+      "name": "Basic LLM Chain",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-3.8-flash",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        272
+      ],
+      "id": "33ecc5d3-c17f-4350-a26a-f2c40ee8088e",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "eaKR6FUEugnRgYpr",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"pertinent\": true,\n  \"score\": 9,\n  \"titre\": \"Titre\",\n  \"entreprise\": \"Entreprise\",\n  \"lieu\": \"Abidjan\",\n  \"resume\": \"Résumé\",\n  \"lien\": \"https://...\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        272
+      ],
+      "id": "0e840853-5209-41e7-b726-d02523e09bcd",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "681c0ba9-23bb-4eae-9e8d-27f4301b82be",
+              "leftValue": "={{ $json.output.pertinent }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        816,
+        -16
+      ],
+      "id": "64e560c2-46fc-48d0-95b5-d3e04bea1b30",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "1843938644",
+        "text": "=🚀 *Nouvelle offre de stage ({{ $json.output.score }}/10)*\n*Poste :* {{ $json.output.titre }}\n*Entreprise :* {{ $json.output.entreprise }}\n*Lieu :* {{ $json.output.lieu }}\n\n📝 {{ $json.output.resume }}\n\n🔗 [Voir l'offre]({{ $json.output.lien }})",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1072,
+        -32
+      ],
+      "id": "9c022a9f-ffd5-41d2-9564-1c19980ade61",
+      "name": "Send a text message",
+      "webhookId": "22ef428f-4c56-494b-b69b-c9f3c251d6a7",
+      "credentials": {
+        "telegramApi": {
+          "id": "4MgIN3RDBhvxWM3m",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://www.google.com/alerts/feeds/13693484765452977325/1916116631106964687",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -432,
+        -160
+      ],
+      "id": "f5ab1533-2f7b-4f0a-bd7c-f71aa2126fab",
+      "name": "RSS Read1"
+    },
+    {
+      "parameters": {
+        "url": "https://www.google.com/alerts/feeds/13693484765452977325/5812408513038752339",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1.2,
+      "position": [
+        -432,
+        96
+      ],
+      "id": "36665982-0415-4888-9d26-e657ddf0254f",
+      "name": "RSS Read2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -208,
+        -32
+      ],
+      "id": "0298b608-ac41-465b-8787-f95eb4d3b596",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "amount": 13
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        128,
+        -16
+      ],
+      "id": "bf2eed40-3cd4-41a2-9401-637c3fe5e40c",
+      "name": "Wait",
+      "webhookId": "c68e2b38-b2ce-4847-845d-910bab6c9d1d"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "RSS Read",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Read2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "RSS Read1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read2": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSS Read1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0ecfa59a-b224-44c6-a58c-c95a42a604d1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ed40e11cdb6f513b9248e8b5f6fdb912bd2eba9feda9b740000d28031ae12b80"
+  },
+  "nodeGroups": [],
+  "id": "1gbASHDijXPl24lY",
+  "tags": []
+}
